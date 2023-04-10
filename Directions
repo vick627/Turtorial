@@ -1,0 +1,108 @@
+importing VMs
+Once your shell has finished launching, we can now start working on the magic!
+First, let's create a new using this command
+vi containers.json
+Now hit the letter "i" to start inserting in to the file
+Copy this and paste it in to the file.
+[
+{
+"Description": "My Server OVA",
+"Format": "ova",
+"Url": "s3://my-import-bucket/vms/my-server-vm.ova"
+}
+]
+
+
+You should be prompted to confirm what you are pasting because it is multiline text, we can use this editor to modify the URL so that it references our OVA that we just uploaded.
+
+So go back to our other tab that has our file information and copy the S3 URI
+
+Modify the text so it now has our URL instead of the default and then paste it in to the file.
+
+Once that is done, hit the ESC key and then type :wq then hit ENTER
+
+
+Now before we can import our image we need to adjust our permissions
+So let's open up another file using VIM again.
+vi trust-policy.json
+Press "i" again to insert and then paste in this.
+{
+"Version": "2012-10-17",
+"Statement": [
+{
+"Effect": "Allow",
+"Principal": { "Service": "vmie.amazonaws.com" },
+"Action": "sts:AssumeRole",
+"Condition": {
+"StringEquals":{
+"sts:Externalid": "vmimport"
+}
+}
+}
+]
+}
+And then like before to save our file we will hit the ESC key and then type :wq then hit ENTER.
+Now to create our policy, paste in this command.
+aws iam create-role --role-name vmimport --assume-role-policy-document "file://~/trust-policy.json"
+
+
+Now we need to take this whole bunch of JSON and create a role, so create another file called role-policy.json
+vi role-policy.json
+Now paste in this.
+{
+"Version":"2012-10-17",
+"Statement":[
+{
+"Effect": "Allow",
+"Action": [
+"s3:GetBucketLocation",
+"s3:GetObject",
+"s3:ListBucket"
+],
+"Resource": [
+"<your arn>",
+"<your arn>/*"
+]
+},
+{
+"Effect": "Allow",
+"Action": [
+"s3:GetBucketLocation",
+"s3:GetObject",
+"s3:ListBucket",
+"s3:PutObject",
+"s3:GetBucketAcl"
+],
+"Resource": [
+"<your arn>",
+"your arn/*"
+]
+},
+{
+"Effect": "Allow",
+"Action": [
+"ec2:ModifySnapshotAttribute",
+"ec2:CopySnapshot",
+"ec2:RegisterImage",
+"ec2:Describe*"
+],
+"Resource": "*"
+}
+]
+}
+Now we need to modify a few things here.
+
+
+Add in the ARN of your S3 bucket to the policy in the sections that have <your arn>. It should look like this once you have it pasted in.
+
+Do our usual to exit the file hit the ESC key and then type :wq then hit ENTER.
+Then we just need to put in this command and it will create our role.
+aws iam put-role-policy --role-name vmimport --policy-name vmimport --policy-document "file://~/role-policy.json"
+Then we have one more command.
+aws ec2 import-image --description "My server VM" --disk-containers "file://~/containers.json"
+After entering that command, you should see this.
+
+
+
+Then to check on the status of our import, we can enter in this command.
+aws ec2 describe-import-image-tasks --import-task-ids <your ImportTaskId>
